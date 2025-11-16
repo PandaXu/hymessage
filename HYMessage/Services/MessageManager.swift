@@ -8,6 +8,7 @@
 import Foundation
 import MessageUI
 import Contacts
+import UniformTypeIdentifiers
 
 class MessageManager: ObservableObject {
     @Published var messages: [Message] = []
@@ -16,34 +17,105 @@ class MessageManager: ObservableObject {
     
     private let classifier = MessageClassifier()
     
-    // 模拟短信数据（实际应用中需要从系统读取）
-    // 注意：iOS系统限制，无法直接读取短信，这里使用模拟数据
+    // 加载短信（优先从文件导入，否则使用模拟数据）
+    // 注意：iOS系统限制，无法直接读取短信数据库
     func loadMessages() {
         isLoading = true
         errorMessage = nil
         
-        // 模拟加载延迟
+        // 尝试从本地存储加载
+        if let savedMessages = loadMessagesFromStorage(), !savedMessages.isEmpty {
+            processMessages(savedMessages)
+            return
+        }
+        
+        // 如果没有保存的数据，使用模拟数据
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             guard let self = self else { return }
             
             // 模拟短信数据
             let mockMessages = self.generateMockMessages()
+            self.processMessages(mockMessages)
+        }
+    }
+    
+    // 处理短信（提取签名和分类）
+    private func processMessages(_ rawMessages: [Message]) {
+        var processedMessages: [Message] = []
+        for var message in rawMessages {
+            // 提取签名
+            message.signature = self.extractSignature(from: message.content)
             
-            // 提取签名并分类
-            var processedMessages: [Message] = []
-            for var message in mockMessages {
-                // 提取签名
-                message.signature = self.extractSignature(from: message.content)
-                
-                // AI分类建议
-                message.aiSuggestedCategory = self.classifier.classify(message: message)
-                
-                processedMessages.append(message)
+            // AI分类建议
+            message.aiSuggestedCategory = self.classifier.classify(message: message)
+            
+            processedMessages.append(message)
+        }
+        
+        self.messages = processedMessages.sorted { $0.timestamp > $1.timestamp }
+        self.isLoading = false
+        
+        // 保存到本地存储
+        saveMessagesToStorage(processedMessages)
+    }
+    
+    // 从文件导入短信
+    func importMessages(from data: Data, format: ImportFormat) {
+        isLoading = true
+        errorMessage = nil
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            var importedMessages: [Message] = []
+            
+            switch format {
+            case .csv:
+                if let csvString = String(data: data, encoding: .utf8) {
+                    importedMessages = MessageImporter.importFromCSV(csvString)
+                }
+            case .json:
+                if let messages = MessageImporter.importFromJSON(data) {
+                    importedMessages = messages
+                }
             }
             
-            self.messages = processedMessages.sorted { $0.timestamp > $1.timestamp }
-            self.isLoading = false
+            DispatchQueue.main.async {
+                if !importedMessages.isEmpty {
+                    self.processMessages(importedMessages)
+                    self.errorMessage = nil
+                } else {
+                    self.errorMessage = "导入失败：无法解析文件格式"
+                    self.isLoading = false
+                }
+            }
         }
+    }
+    
+    // 保存短信到本地存储
+    private func saveMessagesToStorage(_ messages: [Message]) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        if let encoded = try? encoder.encode(messages) {
+            UserDefaults.standard.set(encoded, forKey: "savedMessages")
+        }
+    }
+    
+    // 从本地存储加载短信
+    private func loadMessagesFromStorage() -> [Message]? {
+        if let data = UserDefaults.standard.data(forKey: "savedMessages") {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            if let messages = try? decoder.decode([Message].self, from: data) {
+                return messages
+            }
+        }
+        return nil
+    }
+    
+    // 清空本地存储
+    func clearStoredMessages() {
+        UserDefaults.standard.removeObject(forKey: "savedMessages")
     }
     
     // 提取短信签名
@@ -146,6 +218,13 @@ class MessageManager: ObservableObject {
     // 删除所有短信
     func deleteAllMessages() {
         messages.removeAll()
+        clearStoredMessages()
+    }
+    
+    // 导入格式枚举
+    enum ImportFormat {
+        case csv
+        case json
     }
     
     // 生成模拟数据

@@ -119,7 +119,7 @@ struct SignatureCategoryView: View {
                         if target == "all" {
                             Text("确定要删除所有短信吗？此操作无法撤销。")
                         } else {
-                            Text("确定要删除"\(target)"签名的所有短信吗？")
+                            Text("确定要删除\"\(target)\"签名的所有短信吗？")
                         }
                     }
                 }
@@ -238,7 +238,7 @@ struct AICategoryView: View {
                     }
                 } message: {
                     if let target = deleteTarget {
-                        Text("确定要删除"\(target.rawValue)"分类的所有短信吗？")
+                        Text("确定要删除\"\(target.rawValue)\"分类的所有短信吗？")
                     } else {
                         Text("确定要删除所有短信吗？此操作无法撤销。")
                     }
@@ -256,6 +256,13 @@ struct SettingsView: View {
         NavigationView {
             Form {
                 Section(header: Text("数据管理")) {
+                    NavigationLink(destination: ImportMessageView(messageManager: messageManager)) {
+                        HStack {
+                            Image(systemName: "square.and.arrow.down")
+                            Text("导入短信")
+                        }
+                    }
+                    
                     Button(action: {
                         messageManager.loadMessages()
                     }) {

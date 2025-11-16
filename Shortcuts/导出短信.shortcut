@@ -1,0 +1,29 @@
+{
+  "WFWorkflowActions": [
+    {
+      "WFWorkflowActionIdentifier": "is.workflow.actions.gettext",
+      "WFWorkflowActionParameters": {
+        "WFTextActionText": "由于 iOS 系统限制，无法直接读取短信。\n\n请使用以下方式：\n1. 使用 iMazing 等工具导出短信\n2. 将文件导入到应用\n\n详细说明请查看应用内的导入指南。"
+      }
+    },
+    {
+      "WFWorkflowActionIdentifier": "is.workflow.actions.showalert",
+      "WFWorkflowActionParameters": {
+        "WFAlertActionTitle": "提示",
+        "WFAlertMessage": "由于 iOS 系统限制，无法直接读取短信。\n\n请使用第三方工具（如 iMazing）导出短信，然后在应用中导入。"
+      }
+    }
+  ],
+  "WFWorkflowClientRelease": "2.0",
+  "WFWorkflowClientVersion": "900",
+  "WFWorkflowIcon": {
+    "WFWorkflowIconGlyphNumber": 59511,
+    "WFWorkflowIconStartColor": 4282601983
+  },
+  "WFWorkflowMinimumClientVersion": 900,
+  "WFWorkflowTypes": [
+    "NCWidget",
+    "WatchKit"
+  ]
+}
+

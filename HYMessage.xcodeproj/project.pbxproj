@@ -15,6 +15,8 @@
 		A1000011 /* Views/CategoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* Views/CategoryView.swift */; };
 		A1000013 /* Views/MessageDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014 /* Views/MessageDetailView.swift */; };
 		A1000020 /* Models/MessageModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000017 /* Models/MessageModel.swift */; };
+		A1000022 /* Services/MessageImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000023 /* Services/MessageImporter.swift */; };
+		A1000024 /* Views/ImportMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000025 /* Views/ImportMessageView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +30,8 @@
 		A1000014 /* Views/MessageDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MessageDetailView.swift; sourceTree = "<group>"; };
 		A1000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000017 /* Models/MessageModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/MessageModel.swift; sourceTree = "<group>"; };
+		A1000023 /* Services/MessageImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/MessageImporter.swift; sourceTree = "<group>"; };
+		A1000025 /* Views/ImportMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/ImportMessageView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,8 +61,10 @@
 				A1000017 /* Models/MessageModel.swift */,
 				A1000008 /* Services/MessageManager.swift */,
 				A1000010 /* Services/MessageClassifier.swift */,
+				A1000023 /* Services/MessageImporter.swift */,
 				A1000012 /* Views/CategoryView.swift */,
 				A1000014 /* Views/MessageDetailView.swift */,
+				A1000025 /* Views/ImportMessageView.swift */,
 				A1000006 /* Assets.xcassets */,
 				A1000015 /* Info.plist */,
 			);
@@ -142,8 +148,10 @@
 				A1000020 /* Models/MessageModel.swift in Sources */,
 				A1000007 /* Services/MessageManager.swift in Sources */,
 				A1000009 /* Services/MessageClassifier.swift in Sources */,
+				A1000022 /* Services/MessageImporter.swift in Sources */,
 				A1000011 /* Views/CategoryView.swift in Sources */,
 				A1000013 /* Views/MessageDetailView.swift in Sources */,
+				A1000024 /* Views/ImportMessageView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
