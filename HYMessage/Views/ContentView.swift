@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var messageManager = MessageManager()
+    @EnvironmentObject var messageManager: MessageManager
     @State private var selectedTab = 0
     
     var body: some View {
@@ -42,7 +42,11 @@ struct ContentView: View {
                 .tag(3)
         }
         .onAppear {
-            messageManager.loadMessages()
+            // 如果消息列表为空，则加载消息
+            // 否则 App 启动时已经通过 syncAndReclassify 处理了
+            if messageManager.messages.isEmpty {
+                messageManager.loadMessages()
+            }
         }
     }
 }
@@ -64,7 +68,8 @@ struct MessageListView: View {
         
         if let category = selectedCategory {
             messages = messages.filter { message in
-                (message.category ?? message.aiSuggestedCategory) == category
+                let messageCategory = message.category ?? message.aiSuggestedCategory ?? .other
+                return messageCategory == category
             }
         }
         
@@ -149,11 +154,11 @@ struct MessageRowView: View {
                 
                 Spacer()
                 
-                if let category = message.category ?? message.aiSuggestedCategory {
-                    Label(category.rawValue, systemImage: category.icon)
-                        .font(.caption)
-                        .foregroundColor(category.color)
-                }
+                // 确保所有消息都显示分类，无法分类的显示"其他"
+                let category = message.category ?? message.aiSuggestedCategory ?? .other
+                Label(category.rawValue, systemImage: category.icon)
+                    .font(.caption)
+                    .foregroundColor(category.color)
             }
         }
         .padding(.vertical, 4)
@@ -162,5 +167,6 @@ struct MessageRowView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(MessageManager())
 }
 

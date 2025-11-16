@@ -46,8 +46,16 @@ class MessageManager: ObservableObject {
             // 提取签名
             message.signature = self.extractSignature(from: message.content)
             
-            // AI分类建议
-            message.aiSuggestedCategory = self.classifier.classify(message: message)
+            // AI分类建议（确保所有消息都有分类，无法分类的归到"其他"）
+            let suggestedCategory = self.classifier.classify(message: message)
+            message.aiSuggestedCategory = suggestedCategory
+            
+            // 如果用户没有手动设置分类，使用 AI 建议的分类
+            if message.category == nil {
+                message.category = suggestedCategory
+            }
+            
+            print("[MessageManager]   处理消息: \(message.sender) -> \(suggestedCategory.rawValue)")
             
             processedMessages.append(message)
         }
@@ -92,17 +100,37 @@ class MessageManager: ObservableObject {
         }
     }
     
-    // 保存短信到本地存储
+    // App Group 标识符（用于 Extension 和主应用共享数据）
+    private let appGroupIdentifier = "group.com.hytea.HYMessage"
+    
+    // 获取共享的 UserDefaults
+    private var sharedDefaults: UserDefaults? {
+        return UserDefaults(suiteName: appGroupIdentifier) ?? UserDefaults.standard
+    }
+    
+    // 保存短信到本地存储（支持 App Group 共享）
     private func saveMessagesToStorage(_ messages: [Message]) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         if let encoded = try? encoder.encode(messages) {
+            // 保存到 App Group（Extension 和主应用共享）
+            sharedDefaults?.set(encoded, forKey: "savedMessages")
+            // 同时保存到标准 UserDefaults（兼容性）
             UserDefaults.standard.set(encoded, forKey: "savedMessages")
         }
     }
     
-    // 从本地存储加载短信
+    // 从本地存储加载短信（支持 App Group 共享）
     private func loadMessagesFromStorage() -> [Message]? {
+        // 优先从 App Group 加载
+        if let data = sharedDefaults?.data(forKey: "savedMessages") {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            if let messages = try? decoder.decode([Message].self, from: data) {
+                return messages
+            }
+        }
+        // 兼容：从标准 UserDefaults 加载
         if let data = UserDefaults.standard.data(forKey: "savedMessages") {
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
@@ -115,7 +143,139 @@ class MessageManager: ObservableObject {
     
     // 清空本地存储
     func clearStoredMessages() {
+        sharedDefaults?.removeObject(forKey: "savedMessages")
         UserDefaults.standard.removeObject(forKey: "savedMessages")
+    }
+    
+    // 从 Extension 同步分类数据
+    func syncFromExtension() {
+        print("[MessageManager] 🔄 开始同步 Extension 数据...")
+        
+        guard let data = sharedDefaults?.data(forKey: "classificationHistory"),
+              let classifications = try? JSONDecoder().decode([MessageClassification].self, from: data) else {
+            print("[MessageManager] ⚠️ 未找到 Extension 分类数据")
+            return
+        }
+        
+        print("[MessageManager] ✅ 找到 \(classifications.count) 条分类记录")
+        
+        // 将 Extension 的分类数据转换为 Message 对象
+        var newMessages: [Message] = []
+        for classification in classifications {
+            // 确保分类存在，如果 Extension 返回的分类为 nil，使用"其他"
+            let category = classification.category
+            
+            let message = Message(
+                sender: classification.sender,
+                content: classification.content,
+                timestamp: classification.timestamp,
+                signature: classification.signature,
+                category: category,  // 直接使用 Extension 的分类作为用户分类
+                aiSuggestedCategory: category
+            )
+            newMessages.append(message)
+            print("[MessageManager]   同步消息: \(classification.sender) -> \(category.rawValue)")
+        }
+        
+        // 合并到现有消息（去重）
+        var existingIds = Set(messages.map { $0.id })
+        var addedCount = 0
+        for message in newMessages {
+            // 使用 sender + content + timestamp 作为唯一标识
+            let uniqueId = "\(message.sender)-\(message.content)-\(message.timestamp.timeIntervalSince1970)"
+            if !existingIds.contains(uniqueId) {
+                existingIds.insert(uniqueId)
+                messages.append(message)
+                addedCount += 1
+            }
+        }
+        
+        print("[MessageManager] ✅ 同步完成，新增 \(addedCount) 条消息")
+        
+        // 保存更新后的消息
+        saveMessagesToStorage(messages)
+    }
+    
+    // 重新分类所有短信（使用最新的分类规则）
+    func reclassifyAllMessages() {
+        print("[MessageManager] 🤖 开始重新分类所有短信...")
+        isLoading = true
+        errorMessage = nil
+        
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            var updatedCount = 0
+            var processedMessages: [Message] = []
+            
+            for var message in self.messages {
+                // 重新提取签名
+                let oldSignature = message.signature
+                message.signature = self.extractSignature(from: message.content)
+                if oldSignature != message.signature {
+                    print("[MessageManager]   更新签名: \(oldSignature ?? "nil") -> \(message.signature ?? "nil")")
+                }
+                
+                // 重新分类（确保所有消息都有分类）
+                let oldCategory = message.aiSuggestedCategory ?? .other
+                let newCategory = self.classifier.classify(message: message)
+                message.aiSuggestedCategory = newCategory
+                
+                // 如果用户没有手动设置分类，使用 AI 建议的分类
+                if message.category == nil {
+                    message.category = newCategory
+                }
+                
+                if oldCategory != newCategory {
+                    print("[MessageManager]   更新分类: \(oldCategory.rawValue) -> \(newCategory.rawValue)")
+                    updatedCount += 1
+                }
+                
+                processedMessages.append(message)
+            }
+            
+            DispatchQueue.main.async {
+                self.messages = processedMessages.sorted { $0.timestamp > $1.timestamp }
+                self.isLoading = false
+                self.saveMessagesToStorage(processedMessages)
+                print("[MessageManager] ✅ 重新分类完成，更新了 \(updatedCount) 条短信的分类")
+            }
+        }
+    }
+    
+    // 同步 Extension 数据并重新分类
+    func syncAndReclassify() {
+        print("[MessageManager] 🔄 开始同步和重新分类...")
+        isLoading = true
+        errorMessage = nil
+        
+        // 如果消息列表为空，先加载消息
+        if messages.isEmpty {
+            print("[MessageManager] 📥 消息列表为空，先加载消息...")
+            if let savedMessages = loadMessagesFromStorage(), !savedMessages.isEmpty {
+                messages = savedMessages
+                print("[MessageManager] ✅ 从存储加载了 \(savedMessages.count) 条消息")
+            } else {
+                print("[MessageManager] ⚠️ 没有保存的消息，使用模拟数据")
+                let mockMessages = generateMockMessages()
+                messages = mockMessages
+                print("[MessageManager] ✅ 生成了 \(mockMessages.count) 条模拟消息")
+            }
+        }
+        
+        // 先同步 Extension 数据
+        syncFromExtension()
+        
+        // 然后重新分类所有消息
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            guard let self = self else { return }
+            if !self.messages.isEmpty {
+                self.reclassifyAllMessages()
+            } else {
+                print("[MessageManager] ⚠️ 消息列表仍为空，跳过重新分类")
+                self.isLoading = false
+            }
+        }
     }
     
     // 提取短信签名
@@ -168,12 +328,31 @@ class MessageManager: ObservableObject {
     func messagesGroupedByCategory() -> [MessageCategory: [Message]] {
         var grouped: [MessageCategory: [Message]] = [:]
         
+        // 确保"其他"分类总是存在
+        grouped[.other] = []
+        
         for message in messages {
-            let category = message.category ?? message.aiSuggestedCategory ?? .other
+            // 确保所有消息都有分类，无法分类的归到"其他"
+            let category: MessageCategory
+            if let userCategory = message.category {
+                category = userCategory
+            } else if let aiCategory = message.aiSuggestedCategory {
+                category = aiCategory
+            } else {
+                // 如果既没有用户分类也没有 AI 分类，强制分类为"其他"
+                category = .other
+                print("[MessageManager] ⚠️ 消息无分类，归入'其他': \(message.sender)")
+            }
+            
             if grouped[category] == nil {
                 grouped[category] = []
             }
             grouped[category]?.append(message)
+        }
+        
+        print("[MessageManager] 📊 分类统计:")
+        for (category, messages) in grouped.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+            print("[MessageManager]   \(category.rawValue): \(messages.count) 条")
         }
         
         return grouped

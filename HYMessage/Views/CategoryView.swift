@@ -139,7 +139,10 @@ struct AICategoryView: View {
     var body: some View {
         NavigationView {
             let grouped = messageManager.messagesGroupedByCategory()
-            let sortedCategories = MessageCategory.allCases.filter { grouped[$0] != nil }
+            // 确保"其他"分类总是显示，即使没有消息也显示（显示为0条）
+            let sortedCategories = MessageCategory.allCases.filter { 
+                grouped[$0] != nil || $0 == .other 
+            }
             
             if messageManager.isLoading {
                 ProgressView("加载中...")
@@ -166,7 +169,9 @@ struct AICategoryView: View {
                                             .foregroundColor(.red)
                                     }
                                 } else {
-                                    Text("\(grouped[category]?.count ?? 0)")
+                                    let count = grouped[category]?.count ?? 0
+                                    Text("\(count)条")
+                                        .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
                             }
@@ -249,84 +254,5 @@ struct AICategoryView: View {
     }
 }
 
-struct SettingsView: View {
-    @ObservedObject var messageManager: MessageManager
-    
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("数据管理")) {
-                    NavigationLink(destination: ImportMessageView(messageManager: messageManager)) {
-                        HStack {
-                            Image(systemName: "square.and.arrow.down")
-                            Text("导入短信")
-                        }
-                    }
-                    
-                    Button(action: {
-                        messageManager.loadMessages()
-                    }) {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("刷新短信")
-                        }
-                    }
-                    
-                    Button(action: {
-                        // 清空分类
-                        for index in messageManager.messages.indices {
-                            messageManager.messages[index].category = nil
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "trash")
-                            Text("清空分类")
-                        }
-                        .foregroundColor(.red)
-                    }
-                }
-                
-                Section(header: Text("统计信息")) {
-                    HStack {
-                        Text("总短信数")
-                        Spacer()
-                        Text("\(messageManager.messages.count)")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("已分类")
-                        Spacer()
-                        Text("\(messageManager.messages.filter { $0.category != nil }.count)")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("签名数")
-                        Spacer()
-                        Text("\(Set(messageManager.messages.compactMap { $0.signature }).count)")
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Section(header: Text("关于")) {
-                    HStack {
-                        Text("版本")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("说明")
-                        Spacer()
-                        Text("短信智能管理工具")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .navigationTitle("设置")
-        }
-    }
-}
+// SettingsView 已移至独立的 SettingsView.swift 文件
 

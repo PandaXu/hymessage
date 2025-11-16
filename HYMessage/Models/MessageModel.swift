@@ -6,7 +6,9 @@
 //
 
 import Foundation
+#if canImport(SwiftUI)
 import SwiftUI
+#endif
 
 struct Message: Identifiable, Codable, Hashable {
     let id: String
@@ -66,7 +68,13 @@ enum MessageCategory: String, Codable, CaseIterable, Hashable {
         case .other: return "folder.fill"
         }
     }
-    
+}
+
+// MARK: - SwiftUI Extension
+#if canImport(SwiftUI)
+import SwiftUI
+
+extension MessageCategory {
     var color: Color {
         switch self {
         case .verification: return .blue
@@ -80,4 +88,5 @@ enum MessageCategory: String, Codable, CaseIterable, Hashable {
         }
     }
 }
+#endif
 
