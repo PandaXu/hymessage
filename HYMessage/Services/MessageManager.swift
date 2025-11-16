@@ -121,6 +121,33 @@ class MessageManager: ObservableObject {
         }
     }
     
+    // 删除单个短信
+    func deleteMessage(_ messageId: String) {
+        messages.removeAll { $0.id == messageId }
+    }
+    
+    // 批量删除短信
+    func deleteMessages(_ messageIds: [String]) {
+        messages.removeAll { messageIds.contains($0.id) }
+    }
+    
+    // 删除指定签名的所有短信
+    func deleteMessagesBySignature(_ signature: String) {
+        messages.removeAll { ($0.signature ?? "未知签名") == signature }
+    }
+    
+    // 删除指定分类的所有短信
+    func deleteMessagesByCategory(_ category: MessageCategory) {
+        messages.removeAll { 
+            ($0.category ?? $0.aiSuggestedCategory ?? .other) == category 
+        }
+    }
+    
+    // 删除所有短信
+    func deleteAllMessages() {
+        messages.removeAll()
+    }
+    
     // 生成模拟数据
     private func generateMockMessages() -> [Message] {
         let mockData: [(sender: String, content: String, daysAgo: Int)] = [
