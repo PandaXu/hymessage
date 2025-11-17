@@ -405,6 +405,248 @@ class MessageManager: ObservableObject {
         case csv
         case json
     }
+}
+
+// MARK: - 统计数据模型
+
+/// 总体统计信息
+struct MessageStatistics {
+    let totalMessages: Int
+    let classifiedMessages: Int
+    let signatureCount: Int
+    let filterRulesCount: Int
+}
+
+/// 过滤效果统计
+struct FilterStatistics {
+    let estimatedFiltered: Int
+    let estimatedAllowed: Int
+}
+
+// MARK: - 统计数据方法扩展（基于 Extension 数据）
+
+extension MessageManager {
+    
+    /// 从 Extension 加载分类历史数据
+    private func loadClassificationHistoryFromExtension() -> [MessageClassification] {
+        print("[MessageManager] 📊 从 Extension 加载分类历史数据...")
+        
+        guard let data = sharedDefaults?.data(forKey: "classificationHistory") else {
+            print("[MessageManager] ⚠️ 未找到 Extension 分类历史数据")
+            return []
+        }
+        
+        guard let classifications = try? JSONDecoder().decode([MessageClassification].self, from: data) else {
+            print("[MessageManager] ❌ Extension 分类历史数据解码失败")
+            return []
+        }
+        
+        print("[MessageManager] ✅ 成功加载 \(classifications.count) 条 Extension 分类记录")
+        return classifications
+    }
+    
+    /// 按时间范围过滤分类数据
+    private func filterClassificationsByTimeRange(_ classifications: [MessageClassification], timeRange: StatisticsView.TimeRange) -> [MessageClassification] {
+        guard timeRange != .all else { return classifications }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        var startDate: Date?
+        
+        switch timeRange {
+        case .last7Days:
+            startDate = calendar.date(byAdding: .day, value: -7, to: now)
+        case .last30Days:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now)
+        case .last90Days:
+            startDate = calendar.date(byAdding: .day, value: -90, to: now)
+        default:
+            return classifications
+        }
+        
+        guard let start = startDate else { return classifications }
+        return classifications.filter { $0.timestamp >= start }
+    }
+    
+    /// 获取总体统计信息（基于 Extension 数据）
+    func getStatistics(timeRange: StatisticsView.TimeRange = .all) -> MessageStatistics {
+        let classifications = loadClassificationHistoryFromExtension()
+        let filteredClassifications = filterClassificationsByTimeRange(classifications, timeRange: timeRange)
+        
+        let totalMessages = filteredClassifications.count
+        let classifiedMessages = totalMessages // Extension 数据都是已分类的
+        
+        let signatureSet = Set(filteredClassifications.compactMap { $0.signature })
+        let signatureCount = signatureSet.count
+        
+        let filterRulesCount = FilterRulesManager.shared.getRulesStatistics().enabledCount
+        
+        print("[MessageManager] 📊 统计信息: 总数=\(totalMessages), 签名数=\(signatureCount), 规则数=\(filterRulesCount)")
+        
+        return MessageStatistics(
+            totalMessages: totalMessages,
+            classifiedMessages: classifiedMessages,
+            signatureCount: signatureCount,
+            filterRulesCount: filterRulesCount
+        )
+    }
+    
+    /// 获取分类统计（基于 Extension 数据）
+    func getCategoryStatistics(timeRange: StatisticsView.TimeRange = .all) -> [MessageCategory: Int] {
+        let classifications = loadClassificationHistoryFromExtension()
+        let filteredClassifications = filterClassificationsByTimeRange(classifications, timeRange: timeRange)
+        
+        var stats: [MessageCategory: Int] = [:]
+        
+        for classification in filteredClassifications {
+            let category = classification.category
+            stats[category, default: 0] += 1
+        }
+        
+        print("[MessageManager] 📊 分类统计: \(stats.map { "\($0.key.rawValue): \($0.value)" }.joined(separator: ", "))")
+        
+        return stats
+    }
+    
+    /// 获取签名统计（基于 Extension 数据）
+    func getSignatureStatistics(timeRange: StatisticsView.TimeRange = .all) -> [String: Int] {
+        let classifications = loadClassificationHistoryFromExtension()
+        let filteredClassifications = filterClassificationsByTimeRange(classifications, timeRange: timeRange)
+        
+        var stats: [String: Int] = [:]
+        
+        for classification in filteredClassifications {
+            let signature = classification.signature ?? "未知签名"
+            stats[signature, default: 0] += 1
+        }
+        
+        print("[MessageManager] 📊 签名统计: 共 \(stats.count) 个不同签名")
+        
+        return stats
+    }
+    
+    /// 获取过滤效果统计（基于 Extension 数据）
+    func getFilterStatistics() -> FilterStatistics {
+        let classifications = loadClassificationHistoryFromExtension()
+        let filterRules = FilterRulesManager.shared.rules
+        
+        var estimatedFiltered = 0
+        var estimatedAllowed = 0
+        
+        for classification in classifications {
+            let category = classification.category
+            let signature = classification.signature
+            
+            var shouldFilter = false
+            
+            // 检查签名规则
+            if let signature = signature,
+               let rule = filterRules.signatureRules[signature],
+               rule.action == .filter && rule.enabled {
+                shouldFilter = true
+            }
+            
+            // 检查分类规则
+            if !shouldFilter,
+               let rule = filterRules.categoryRules[category],
+               rule.action == .filter && rule.enabled {
+                shouldFilter = true
+            }
+            
+            // 默认规则：营销推广
+            if !shouldFilter && category == .promotion {
+                shouldFilter = true
+            }
+            
+            if shouldFilter {
+                estimatedFiltered += 1
+            } else {
+                estimatedAllowed += 1
+            }
+        }
+        
+        print("[MessageManager] 📊 过滤统计: 预计过滤=\(estimatedFiltered), 预计允许=\(estimatedAllowed)")
+        
+        return FilterStatistics(
+            estimatedFiltered: estimatedFiltered,
+            estimatedAllowed: estimatedAllowed
+        )
+    }
+    
+    /// 获取时间分布（基于 Extension 数据）
+    func getTimeDistribution(timeRange: StatisticsView.TimeRange = .all) -> [Int] {
+        let classifications = loadClassificationHistoryFromExtension()
+        let filteredClassifications = filterClassificationsByTimeRange(classifications, timeRange: timeRange)
+        
+        let calendar = Calendar.current
+        let now = Date()
+        var distribution: [Int] = []
+        
+        switch timeRange {
+        case .all:
+            // 按周统计（最近12周）
+            distribution = Array(repeating: 0, count: 12)
+            for classification in filteredClassifications {
+                let weeksAgo = calendar.dateComponents([.weekOfYear], from: classification.timestamp, to: now).weekOfYear ?? 0
+                if weeksAgo < 12 {
+                    distribution[11 - weeksAgo] += 1
+                }
+            }
+        case .last7Days:
+            distribution = Array(repeating: 0, count: 7)
+            for classification in filteredClassifications {
+                let daysAgo = calendar.dateComponents([.day], from: classification.timestamp, to: now).day ?? 0
+                if daysAgo < 7 {
+                    distribution[6 - daysAgo] += 1
+                }
+            }
+        case .last30Days:
+            distribution = Array(repeating: 0, count: 30)
+            for classification in filteredClassifications {
+                let daysAgo = calendar.dateComponents([.day], from: classification.timestamp, to: now).day ?? 0
+                if daysAgo < 30 {
+                    distribution[29 - daysAgo] += 1
+                }
+            }
+        case .last90Days:
+            // 按周统计（12周）
+            distribution = Array(repeating: 0, count: 12)
+            for classification in filteredClassifications {
+                let weeksAgo = calendar.dateComponents([.weekOfYear], from: classification.timestamp, to: now).weekOfYear ?? 0
+                if weeksAgo < 12 {
+                    distribution[11 - weeksAgo] += 1
+                }
+            }
+        }
+        
+        print("[MessageManager] 📊 时间分布: \(distribution.map { String($0) }.joined(separator: ", "))")
+        
+        return distribution
+    }
+    
+    /// 按时间范围过滤消息（保留用于兼容性）
+    private func filterMessagesByTimeRange(_ messages: [Message], timeRange: StatisticsView.TimeRange) -> [Message] {
+        guard timeRange != .all else { return messages }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        var startDate: Date?
+        
+        switch timeRange {
+        case .all:
+            return messages
+        case .last7Days:
+            startDate = calendar.date(byAdding: .day, value: -7, to: now)
+        case .last30Days:
+            startDate = calendar.date(byAdding: .day, value: -30, to: now)
+        case .last90Days:
+            startDate = calendar.date(byAdding: .day, value: -90, to: now)
+        }
+        
+        guard let startDate = startDate else { return messages }
+        
+        return messages.filter { $0.timestamp >= startDate }
+    }
     
     // 生成模拟数据
     private func generateMockMessages() -> [Message] {

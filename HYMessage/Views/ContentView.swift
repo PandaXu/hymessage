@@ -34,12 +34,19 @@ struct ContentView: View {
                 }
                 .tag(2)
             
+            // 数据统计
+            StatisticsView(messageManager: messageManager)
+                .tabItem {
+                    Label("统计", systemImage: "chart.bar.fill")
+                }
+                .tag(3)
+            
             // 设置
             SettingsView(messageManager: messageManager)
                 .tabItem {
                     Label("设置", systemImage: "gearshape.fill")
                 }
-                .tag(3)
+                .tag(4)
         }
         .onAppear {
             // 如果消息列表为空，则加载消息
